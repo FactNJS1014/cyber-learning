@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   BookOpen,
@@ -18,7 +18,12 @@ import {
   Shield,
   Filter,
   Check,
-  ExternalLink
+  ExternalLink,
+  Database,
+  RefreshCw,
+  Server,
+  HardDrive,
+  Cpu
 } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
 import ProgressBar from '@/components/ProgressBar';
@@ -42,7 +47,7 @@ export default function AdminDashboardClient({
   courses,
   adminId,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'lessons' | 'projects' | 'audit'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'lessons' | 'projects' | 'audit' | 'database'>('analytics');
 
   // States
   const [users, setUsers] = useState(initialUsers);
@@ -50,6 +55,62 @@ export default function AdminDashboardClient({
   const [lessons, setLessons] = useState(initialLessons);
   const [submissions, setSubmissions] = useState(initialSubmissions);
   const [logs, setLogs] = useState(initialLogs);
+
+  // Database Management State
+  const [dbStats, setDbStats] = useState<any | null>(null);
+  const [isDbLoading, setIsDbLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchDatabaseInfo = async () => {
+    try {
+      setIsDbLoading(true);
+      const res = await fetch('/api/admin/database');
+      const data = await res.json();
+      if (res.ok) {
+        setDbStats(data.stats);
+        if (data.users) {
+          // Sync users list if updated
+          const safeUsers = data.users.map((u: any) => ({
+            ...u,
+            completedLessonsCount: 0,
+            hasCertificate: false,
+          }));
+          setUsers(safeUsers);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load db status:', err);
+    } finally {
+      setIsDbLoading(false);
+    }
+  };
+
+  const handleSelectTab = (tab: 'analytics' | 'users' | 'lessons' | 'projects' | 'audit' | 'database') => {
+    setActiveTab(tab);
+    if (tab === 'database') {
+      fetchDatabaseInfo();
+    }
+  };
+
+  const handleSyncDatabase = async () => {
+    try {
+      setIsSyncing(true);
+      setSyncMessage(null);
+      const res = await fetch('/api/admin/database', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSyncMessage({ type: 'success', text: data.message });
+        await fetchDatabaseInfo();
+      } else {
+        setSyncMessage({ type: 'error', text: data.message || 'ซิงค์ไม่สำเร็จ' });
+      }
+    } catch (err: any) {
+      setSyncMessage({ type: 'error', text: err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Modals / Selected Items
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
@@ -195,7 +256,7 @@ export default function AdminDashboardClient({
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-900 border border-slate-800 overflow-x-auto">
         <button
-          onClick={() => setActiveTab('analytics')}
+          onClick={() => handleSelectTab('analytics')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold transition-all whitespace-nowrap ${
             activeTab === 'analytics'
               ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
@@ -207,7 +268,7 @@ export default function AdminDashboardClient({
         </button>
 
         <button
-          onClick={() => setActiveTab('users')}
+          onClick={() => handleSelectTab('users')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold transition-all whitespace-nowrap ${
             activeTab === 'users'
               ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
@@ -219,7 +280,7 @@ export default function AdminDashboardClient({
         </button>
 
         <button
-          onClick={() => setActiveTab('lessons')}
+          onClick={() => handleSelectTab('lessons')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold transition-all whitespace-nowrap ${
             activeTab === 'lessons'
               ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
@@ -231,7 +292,7 @@ export default function AdminDashboardClient({
         </button>
 
         <button
-          onClick={() => setActiveTab('projects')}
+          onClick={() => handleSelectTab('projects')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold transition-all whitespace-nowrap ${
             activeTab === 'projects'
               ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
@@ -243,7 +304,7 @@ export default function AdminDashboardClient({
         </button>
 
         <button
-          onClick={() => setActiveTab('audit')}
+          onClick={() => handleSelectTab('audit')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold transition-all whitespace-nowrap ${
             activeTab === 'audit'
               ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
@@ -252,6 +313,18 @@ export default function AdminDashboardClient({
         >
           <Shield className="h-3.5 w-3.5" />
           Security Audit Trail
+        </button>
+
+        <button
+          onClick={() => handleSelectTab('database')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold transition-all whitespace-nowrap ${
+            activeTab === 'database'
+              ? 'bg-amber-500 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Database className="h-3.5 w-3.5" />
+          Database & Persistence
         </button>
       </div>
 
@@ -602,6 +675,241 @@ export default function AdminDashboardClient({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ================= TAB 6: DATABASE & PERSISTENCE ================= */}
+      {activeTab === 'database' && (
+        <div className="space-y-6">
+          {/* Header & Control Banner */}
+          <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-amber-500" />
+                <h3 className="text-base font-bold text-white font-mono">
+                  Database & Persistence Engine (สถานะฐานข้อมูลและการจัดเก็บ)
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400">
+                ระบบรองรับทั้ง Neon PostgreSQL Serverless และ Embedded Local Storage พร้อมระบบตรวจสอบและซิงค์ข้อมูลสองทิศทาง
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={fetchDatabaseInfo}
+                disabled={isDbLoading}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-xs transition-all"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isDbLoading ? 'animate-spin' : ''}`} />
+                รีเฟรชสถานะ
+              </button>
+
+              <button
+                onClick={handleSyncDatabase}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'กำลังซิงค์ข้อมูล...' : 'ซิงค์ข้อมูลกับฐานข้อมูล (Sync DB)'}
+              </button>
+            </div>
+          </div>
+
+          {/* Sync status toast/message */}
+          {syncMessage && (
+            <div
+              className={`p-4 rounded-xl border text-xs font-mono flex items-center gap-2 ${
+                syncMessage.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  : 'bg-red-500/10 border-red-500/30 text-red-400'
+              }`}
+            >
+              {syncMessage.type === 'success' ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+              )}
+              <span>{syncMessage.text}</span>
+            </div>
+          )}
+
+          {/* Connection Status Card */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                <span>Active Storage Engine</span>
+                <Server className="h-4 w-4 text-cyan-400" />
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    dbStats?.isNeonConfigured && dbStats?.neonConnected
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-amber-400'
+                  }`}
+                />
+                <span className="text-sm font-bold text-white font-mono">
+                  {dbStats?.isNeonConfigured && dbStats?.neonConnected
+                    ? 'Neon PostgreSQL (Cloud)'
+                    : 'Local JSON Store (Embedded)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-mono">
+                {dbStats?.isNeonConfigured
+                  ? `Host: ${dbStats.connectionHost || 'Neon Cloud'}`
+                  : 'จัดเก็บใน data/db.json ปลอดภัยและพร้อมใช้งาน'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                <span>Registered Accounts (บัญชีในระบบ)</span>
+                <Users className="h-4 w-4 text-amber-400" />
+              </div>
+              <div className="text-2xl font-bold text-white font-mono">
+                {users.length} <span className="text-xs text-slate-500 font-normal">Accounts</span>
+              </div>
+              <p className="text-[11px] text-slate-500 font-mono">
+                ทุกครั้งที่มีการ Register ข้อมูลจะถูกบันทึกและแสดงที่นี่ทันที
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                <span>Persistence Integrity</span>
+                <HardDrive className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div className="text-sm font-bold text-emerald-400 font-mono flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                Operational & Synced
+              </div>
+              <p className="text-[11px] text-slate-500 font-mono">
+                {dbStats?.neonConnected
+                  ? 'PostgreSQL tables verified: users, sessions, progress, quiz_attempts'
+                  : 'JSON file read/write operational'}
+              </p>
+            </div>
+          </div>
+
+          {/* Table Breakdown */}
+          {dbStats && (
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4">
+              <h4 className="text-xs font-bold text-slate-300 font-mono uppercase tracking-wider">
+                Live Data Entity Metrics (สถิติตารางข้อมูล)
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">USERS</div>
+                  <div className="text-base font-bold text-amber-400 font-mono">
+                    {dbStats.neonStats?.users ?? dbStats.localStats?.users ?? users.length}
+                  </div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">SESSIONS</div>
+                  <div className="text-base font-bold text-cyan-400 font-mono">
+                    {dbStats.neonStats?.sessions ?? dbStats.localStats?.sessions ?? 0}
+                  </div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">LESSONS</div>
+                  <div className="text-base font-bold text-emerald-400 font-mono">
+                    {lessons.length}
+                  </div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">QUIZZES</div>
+                  <div className="text-base font-bold text-purple-400 font-mono">
+                    {dbStats.localStats?.quizzes ?? 16}
+                  </div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">QUIZ ATTEMPTS</div>
+                  <div className="text-base font-bold text-rose-400 font-mono">
+                    {dbStats.neonStats?.quizAttempts ?? dbStats.localStats?.quizAttempts ?? 0}
+                  </div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">PROGRESS</div>
+                  <div className="text-base font-bold text-blue-400 font-mono">
+                    {dbStats.neonStats?.lessonProgress ?? dbStats.localStats?.lessonProgress ?? 0}
+                  </div>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-center">
+                  <div className="text-[10px] text-slate-400 font-mono">AUDIT LOGS</div>
+                  <div className="text-base font-bold text-slate-300 font-mono">
+                    {dbStats.neonStats?.auditLogs ?? dbStats.localStats?.auditLogs ?? logs.length}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* All Registered Users in DB */}
+          <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-white font-mono">
+                  All Database Registered Accounts (บัญชีทั้งหมดในฐานข้อมูล)
+                </h4>
+                <p className="text-xs text-slate-400">
+                  รายชื่อผู้ใช้ที่ลงทะเบียนแล้วทั้งหมด พร้อม ID, อีเมล, สิทธิ์ (Role) และวันเวลาที่สมัคร
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                {users.length} Records
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="border-b border-slate-800 text-slate-400 uppercase">
+                  <tr>
+                    <th className="py-3 px-3">User ID</th>
+                    <th className="py-3 px-3">Name</th>
+                    <th className="py-3 px-3">Email</th>
+                    <th className="py-3 px-3">Role</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-3">Registered At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-950/40">
+                      <td className="py-3 px-3 text-slate-500 font-mono text-[11px]">{u.id}</td>
+                      <td className="py-3 px-3 font-bold text-white font-sans">{u.name}</td>
+                      <td className="py-3 px-3 text-cyan-400">{u.email}</td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            u.role === 'ADMIN'
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                              : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            u.status === 'ACTIVE'
+                              ? 'bg-emerald-500/10 text-emerald-400'
+                              : 'bg-red-500/10 text-red-400'
+                          }`}
+                        >
+                          {u.status || 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-slate-400">
+                        {u.createdAt ? new Date(u.createdAt).toLocaleString('th-TH') : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

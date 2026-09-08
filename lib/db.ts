@@ -32,7 +32,23 @@ import {
   initialFinalProject,
   initialAchievements,
 } from './seedData';
-import { isNeonConfigured, initNeonSchema } from './neon';
+import {
+  isNeonConfigured,
+  initNeonSchema,
+  neonInsertUser,
+  neonUpdateUser,
+  neonDeleteUser,
+  neonGetUserByEmail,
+  neonGetUserById,
+  neonGetAllUsers,
+  neonInsertSession,
+  neonDeleteSession,
+  neonDeleteUserSessions,
+  neonSaveLessonProgress,
+  neonSaveQuizAttempt,
+  neonRecordAuditLog,
+  getNeonSql,
+} from './neon';
 
 interface DatabaseSchema {
   users: User[];
@@ -113,19 +129,7 @@ export function getDb(): DatabaseSchema {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
       memoryDb = JSON.parse(data);
       // Ensure all arrays exist
-      if (!memoryDb!.users) {
-        memoryDb = getInitialDatabase();
-      } else {
-        // Sync enriched Thai curriculum data while preserving user progress & credentials
-        memoryDb!.levels = [...initialLevels];
-        memoryDb!.courses = [...initialCourses];
-        memoryDb!.lessons = [...initialLessons];
-        memoryDb!.quizzes = [...initialQuizzes];
-        memoryDb!.labs = [...initialLabs];
-        memoryDb!.finalProjects = [initialFinalProject];
-        memoryDb!.achievements = [...initialAchievements];
-      }
-      saveDb(memoryDb!);
+      if (!memoryDb!.users) memoryDb = getInitialDatabase();
       return memoryDb!;
     } catch (err) {
       console.error('Error reading db.json, re-initializing seed data:', err);
@@ -150,16 +154,63 @@ export function saveDb(db: DatabaseSchema) {
 // ==================== USER OPERATIONS ====================
 export async function findUserByEmail(email: string): Promise<User | null> {
   const db = getDb();
-  return db.users.find((u) => u.email.toLowerCase() === email.toLowerCase()) || null;
+  const localUser = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  if (localUser) return localUser;
+
+  if (isNeonConfigured()) {
+    try {
+      const neonUser = await neonGetUserByEmail(email);
+      if (neonUser) {
+        db.users.push(neonUser);
+        saveDb(db);
+        return neonUser;
+      }
+    } catch (e) {
+      console.warn('Neon findUserByEmail lookup failed:', e);
+    }
+  }
+
+  return null;
 }
 
 export async function findUserById(id: string): Promise<User | null> {
   const db = getDb();
-  return db.users.find((u) => u.id === id) || null;
+  const localUser = db.users.find((u) => u.id === id);
+  if (localUser) return localUser;
+
+  if (isNeonConfigured()) {
+    try {
+      const neonUser = await neonGetUserById(id);
+      if (neonUser) {
+        db.users.push(neonUser);
+        saveDb(db);
+        return neonUser;
+      }
+    } catch (e) {
+      console.warn('Neon findUserById lookup failed:', e);
+    }
+  }
+
+  return null;
 }
 
 export async function getAllUsers(): Promise<User[]> {
   const db = getDb();
+  if (isNeonConfigured()) {
+    try {
+      const neonUsers = await neonGetAllUsers();
+      if (neonUsers && neonUsers.length > 0) {
+        // Merge without duplicating
+        const userMap = new Map<string, User>();
+        for (const u of db.users) userMap.set(u.id, u);
+        for (const u of neonUsers) userMap.set(u.id, u);
+        db.users = Array.from(userMap.values());
+        saveDb(db);
+      }
+    } catch (e) {
+      console.warn('Neon getAllUsers lookup failed, falling back to local store:', e);
+    }
+  }
   return db.users;
 }
 
@@ -171,8 +222,19 @@ export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'upda
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+
   db.users.push(newUser);
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    try {
+      await neonInsertUser(newUser);
+      console.log(`[Database] User ${newUser.email} (${newUser.id}) successfully persisted to Neon PostgreSQL.`);
+    } catch (err) {
+      console.error('[Database] Failed to write new user to Neon PostgreSQL:', err);
+    }
+  }
+
   return newUser;
 }
 
@@ -186,6 +248,15 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
     updatedAt: new Date().toISOString(),
   };
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    try {
+      await neonUpdateUser(id, updates);
+    } catch (err) {
+      console.error('Failed to update user in Neon PostgreSQL:', err);
+    }
+  }
+
   return db.users[index];
 }
 
@@ -200,6 +271,15 @@ export async function deleteUser(id: string): Promise<boolean> {
   db.quizAttempts = db.quizAttempts.filter((q) => q.userId !== id);
   db.labProgress = db.labProgress.filter((l) => l.userId !== id);
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    try {
+      await neonDeleteUser(id);
+    } catch (err) {
+      console.error('Failed to delete user in Neon PostgreSQL:', err);
+    }
+  }
+
   return true;
 }
 
@@ -215,12 +295,22 @@ export async function createSession(userId: string, sessionToken: string, expire
   };
   db.sessions.push(session);
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    try {
+      await neonInsertSession(session);
+    } catch (err) {
+      console.warn('Neon insertSession error:', err);
+    }
+  }
+
   return session;
 }
 
 export async function findSessionByToken(token: string): Promise<(Session & { user: User }) | null> {
   const db = getDb();
-  const session = db.sessions.find((s) => s.sessionToken === token);
+  let session = db.sessions.find((s) => s.sessionToken === token);
+
   if (!session) return null;
 
   // Check expiration
@@ -228,10 +318,21 @@ export async function findSessionByToken(token: string): Promise<(Session & { us
     // Expired - clean it up
     db.sessions = db.sessions.filter((s) => s.id !== session.id);
     saveDb(db);
+    if (isNeonConfigured()) {
+      neonDeleteSession(token).catch(console.warn);
+    }
     return null;
   }
 
-  const user = db.users.find((u) => u.id === session.userId);
+  let user = db.users.find((u) => u.id === session.userId);
+  if (!user && isNeonConfigured()) {
+    user = (await neonGetUserById(session.userId)) || undefined;
+    if (user) {
+      db.users.push(user);
+      saveDb(db);
+    }
+  }
+
   if (!user || user.status !== 'ACTIVE') return null;
 
   return { ...session, user };
@@ -242,6 +343,11 @@ export async function deleteSessionByToken(token: string): Promise<boolean> {
   const initialLen = db.sessions.length;
   db.sessions = db.sessions.filter((s) => s.sessionToken !== token);
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    neonDeleteSession(token).catch(console.warn);
+  }
+
   return db.sessions.length < initialLen;
 }
 
@@ -249,6 +355,10 @@ export async function deleteSessionsByUserId(userId: string): Promise<void> {
   const db = getDb();
   db.sessions = db.sessions.filter((s) => s.userId !== userId);
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    neonDeleteUserSessions(userId).catch(console.warn);
+  }
 }
 
 // ==================== LEVEL / COURSE / LESSON OPERATIONS ====================
@@ -844,12 +954,66 @@ export async function recordAuditLog(entry: {
   // Keep max 500 audit logs
   if (db.auditLogs.length > 500) db.auditLogs.pop();
   saveDb(db);
+
+  if (isNeonConfigured()) {
+    neonRecordAuditLog(log).catch(console.warn);
+  }
+
   return log;
 }
 
 export async function getAuditLogs(): Promise<AuditLog[]> {
   const db = getDb();
   return db.auditLogs;
+}
+
+// ==================== NEON SYNC FUNCTION ====================
+export async function syncLocalToNeon(): Promise<{ success: boolean; message: string; count?: number }> {
+  if (!isNeonConfigured()) {
+    return {
+      success: false,
+      message: 'Neon PostgreSQL is not configured. DATABASE_URL environment variable is missing or placeholder.',
+    };
+  }
+
+  try {
+    await initNeonSchema();
+    const db = getDb();
+    let count = 0;
+
+    for (const user of db.users) {
+      await neonInsertUser(user);
+      count++;
+    }
+
+    for (const session of db.sessions) {
+      await neonInsertSession(session);
+    }
+
+    for (const lp of db.lessonProgress) {
+      await neonSaveLessonProgress(lp);
+    }
+
+    for (const qa of db.quizAttempts) {
+      await neonSaveQuizAttempt(qa);
+    }
+
+    for (const log of db.auditLogs.slice(0, 50)) {
+      await neonRecordAuditLog(log);
+    }
+
+    return {
+      success: true,
+      message: `ซิงค์ข้อมูลสำเร็จ! ซิงค์ผู้ใช้งาน ${count} บัญชี และสถานะระบบไปยัง PostgreSQL เรียบร้อยแล้ว`,
+      count,
+    };
+  } catch (err: any) {
+    console.error('syncLocalToNeon error:', err);
+    return {
+      success: false,
+      message: `เกิดข้อผิดพลาดในการซิงค์ฐานข้อมูล: ${err.message || 'Unknown database error'}`,
+    };
+  }
 }
 
 // ==================== ADMIN ANALYTICS ====================

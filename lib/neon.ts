@@ -1,4 +1,25 @@
 import { neon, Pool } from '@neondatabase/serverless';
+import {
+  User,
+  Session,
+  Level,
+  Course,
+  Lesson,
+  Quiz,
+  QuizAttempt,
+  Lab,
+  LabProgress,
+  LessonProgress,
+  FinalProject,
+  ProjectSubmission,
+  Certificate,
+  Achievement,
+  UserAchievement,
+  Bookmark,
+  Note,
+  LearningActivity,
+  AuditLog,
+} from '@/types';
 
 let poolInstance: Pool | null = null;
 let schemaInitialized = false;
@@ -281,5 +302,343 @@ export async function initNeonSchema(): Promise<boolean> {
   } catch (error) {
     console.error('Failed to initialize Neon PostgreSQL schema:', error);
     return false;
+  }
+}
+
+// ==================== NEON USER OPERATIONS ====================
+
+export async function neonInsertUser(user: User): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`
+      INSERT INTO users (id, email, password_hash, name, role, status, avatar_url, bio, created_at, updated_at)
+      VALUES (
+        ${user.id},
+        ${user.email.toLowerCase()},
+        ${user.passwordHash},
+        ${user.name},
+        ${user.role},
+        ${user.status},
+        ${user.avatar || null},
+        ${user.bio || null},
+        ${user.createdAt},
+        ${user.updatedAt}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        email = EXCLUDED.email,
+        password_hash = EXCLUDED.password_hash,
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        status = EXCLUDED.status,
+        avatar_url = EXCLUDED.avatar_url,
+        bio = EXCLUDED.bio,
+        updated_at = EXCLUDED.updated_at;
+    `;
+    return true;
+  } catch (err) {
+    console.error('Neon insertUser error:', err);
+    return false;
+  }
+}
+
+export async function neonUpdateUser(id: string, updates: Partial<User>): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    const existing = await neonGetUserById(id);
+    if (!existing) return false;
+
+    const merged = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    await sql`
+      UPDATE users SET
+        name = ${merged.name},
+        role = ${merged.role},
+        status = ${merged.status},
+        avatar_url = ${merged.avatar || null},
+        bio = ${merged.bio || null},
+        updated_at = ${merged.updatedAt}
+      WHERE id = ${id};
+    `;
+    return true;
+  } catch (err) {
+    console.error('Neon updateUser error:', err);
+    return false;
+  }
+}
+
+export async function neonDeleteUser(id: string): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`DELETE FROM users WHERE id = ${id};`;
+    return true;
+  } catch (err) {
+    console.error('Neon deleteUser error:', err);
+    return false;
+  }
+}
+
+export async function neonGetUserByEmail(email: string): Promise<User | null> {
+  if (!isNeonConfigured()) return null;
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT id, email, password_hash as "passwordHash", name, role, status, avatar_url as "avatar", bio, created_at as "createdAt", updated_at as "updatedAt"
+      FROM users
+      WHERE LOWER(email) = LOWER(${email})
+      LIMIT 1;
+    `;
+    if (!rows || rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      email: r.email,
+      passwordHash: r.passwordHash,
+      name: r.name,
+      role: r.role as any,
+      status: r.status as any,
+      avatar: r.avatar || undefined,
+      bio: r.bio || undefined,
+      createdAt: new Date(r.createdAt).toISOString(),
+      updatedAt: new Date(r.updatedAt).toISOString(),
+    };
+  } catch (err) {
+    console.error('Neon getUserByEmail error:', err);
+    return null;
+  }
+}
+
+export async function neonGetUserById(id: string): Promise<User | null> {
+  if (!isNeonConfigured()) return null;
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT id, email, password_hash as "passwordHash", name, role, status, avatar_url as "avatar", bio, created_at as "createdAt", updated_at as "updatedAt"
+      FROM users
+      WHERE id = ${id}
+      LIMIT 1;
+    `;
+    if (!rows || rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      email: r.email,
+      passwordHash: r.passwordHash,
+      name: r.name,
+      role: r.role as any,
+      status: r.status as any,
+      avatar: r.avatar || undefined,
+      bio: r.bio || undefined,
+      createdAt: new Date(r.createdAt).toISOString(),
+      updatedAt: new Date(r.updatedAt).toISOString(),
+    };
+  } catch (err) {
+    console.error('Neon getUserById error:', err);
+    return null;
+  }
+}
+
+export async function neonGetAllUsers(): Promise<User[]> {
+  if (!isNeonConfigured()) return [];
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT id, email, password_hash as "passwordHash", name, role, status, avatar_url as "avatar", bio, created_at as "createdAt", updated_at as "updatedAt"
+      FROM users
+      ORDER BY created_at DESC;
+    `;
+    return rows.map((r: any) => ({
+      id: r.id,
+      email: r.email,
+      passwordHash: r.passwordHash,
+      name: r.name,
+      role: r.role as any,
+      status: r.status as any,
+      avatar: r.avatar || undefined,
+      bio: r.bio || undefined,
+      createdAt: new Date(r.createdAt).toISOString(),
+      updatedAt: new Date(r.updatedAt).toISOString(),
+    }));
+  } catch (err) {
+    console.error('Neon getAllUsers error:', err);
+    return [];
+  }
+}
+
+// ==================== NEON SESSION OPERATIONS ====================
+
+export async function neonInsertSession(session: Session): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`
+      INSERT INTO sessions (id, user_id, session_token, expires_at, created_at)
+      VALUES (${session.id}, ${session.userId}, ${session.sessionToken}, ${session.expiresAt}, ${session.createdAt})
+      ON CONFLICT (session_token) DO UPDATE SET
+        expires_at = EXCLUDED.expires_at;
+    `;
+    return true;
+  } catch (err) {
+    console.error('Neon insertSession error:', err);
+    return false;
+  }
+}
+
+export async function neonDeleteSession(token: string): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`DELETE FROM sessions WHERE session_token = ${token};`;
+    return true;
+  } catch (err) {
+    console.error('Neon deleteSession error:', err);
+    return false;
+  }
+}
+
+export async function neonDeleteUserSessions(userId: string): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`DELETE FROM sessions WHERE user_id = ${userId};`;
+    return true;
+  } catch (err) {
+    console.error('Neon deleteUserSessions error:', err);
+    return false;
+  }
+}
+
+// ==================== NEON PROGRESS & LOGS ====================
+
+export async function neonSaveLessonProgress(p: LessonProgress): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`
+      INSERT INTO lesson_progress (id, user_id, lesson_id, is_completed, completed_at, created_at, updated_at)
+      VALUES (${p.id}, ${p.userId}, ${p.lessonId}, ${p.isCompleted}, ${p.completedAt || null}, ${p.createdAt}, ${p.updatedAt})
+      ON CONFLICT (id) DO UPDATE SET
+        is_completed = EXCLUDED.is_completed,
+        completed_at = EXCLUDED.completed_at,
+        updated_at = EXCLUDED.updated_at;
+    `;
+    return true;
+  } catch (err) {
+    console.error('Neon saveLessonProgress error:', err);
+    return false;
+  }
+}
+
+export async function neonSaveQuizAttempt(q: QuizAttempt): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    await sql`
+      INSERT INTO quiz_attempts (id, user_id, quiz_id, score, passed, answers_json, completed_at)
+      VALUES (${q.id}, ${q.userId}, ${q.quizId}, ${q.score}, ${q.passed}, ${JSON.stringify(q.userAnswers || {})}::jsonb, ${q.createdAt || new Date().toISOString()})
+      ON CONFLICT (id) DO NOTHING;
+    `;
+    return true;
+  } catch (err) {
+    console.error('Neon saveQuizAttempt error:', err);
+    return false;
+  }
+}
+
+export async function neonRecordAuditLog(log: AuditLog): Promise<boolean> {
+  if (!isNeonConfigured()) return false;
+  try {
+    const sql = getNeonSql();
+    const details = `${log.action} on ${log.resource || 'System'}${log.resourceId ? ` (${log.resourceId})` : ''}: ${JSON.stringify(log.metadata || {})}`;
+    await sql`
+      INSERT INTO audit_logs (id, user_id, action, details, timestamp)
+      VALUES (${log.id}, ${log.userId || null}, ${log.action}, ${details}, ${log.timestamp});
+    `;
+    return true;
+  } catch (err) {
+    console.error('Neon recordAuditLog error:', err);
+    return false;
+  }
+}
+
+// ==================== NEON DATABASE STATS & SYNC ====================
+
+export interface DatabaseStats {
+  isConfigured: boolean;
+  type: 'Neon PostgreSQL' | 'Embedded Local Storage';
+  connectionUrlMasked?: string;
+  tables: {
+    users: number;
+    sessions: number;
+    lessons: number;
+    quizzes: number;
+    quizAttempts: number;
+    lessonProgress: number;
+    auditLogs: number;
+  };
+  lastSyncAt: string;
+}
+
+export async function getDatabaseStats(localCounts: {
+  users: number;
+  sessions: number;
+  lessons: number;
+  quizzes: number;
+  quizAttempts: number;
+  lessonProgress: number;
+  auditLogs: number;
+}): Promise<DatabaseStats> {
+  const isConfigured = isNeonConfigured();
+  if (!isConfigured) {
+    return {
+      isConfigured: false,
+      type: 'Embedded Local Storage',
+      tables: localCounts,
+      lastSyncAt: new Date().toISOString(),
+    };
+  }
+
+  const rawUrl = getDatabaseUrl() || '';
+  const maskedUrl = rawUrl.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
+
+  try {
+    const sql = getNeonSql();
+    await initNeonSchema();
+
+    const [uCount, sCount, lCount, qCount, qaCount, lpCount, aCount] = await Promise.all([
+      sql`SELECT count(*)::int as count FROM users;`,
+      sql`SELECT count(*)::int as count FROM sessions;`,
+      sql`SELECT count(*)::int as count FROM lessons;`,
+      sql`SELECT count(*)::int as count FROM quizzes;`,
+      sql`SELECT count(*)::int as count FROM quiz_attempts;`,
+      sql`SELECT count(*)::int as count FROM lesson_progress;`,
+      sql`SELECT count(*)::int as count FROM audit_logs;`,
+    ]);
+
+    return {
+      isConfigured: true,
+      type: 'Neon PostgreSQL',
+      connectionUrlMasked: maskedUrl,
+      tables: {
+        users: uCount[0]?.count || 0,
+        sessions: sCount[0]?.count || 0,
+        lessons: lCount[0]?.count || 0,
+        quizzes: qCount[0]?.count || 0,
+        quizAttempts: qaCount[0]?.count || 0,
+        lessonProgress: lpCount[0]?.count || 0,
+        auditLogs: aCount[0]?.count || 0,
+      },
+      lastSyncAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.error('Failed to query Neon PostgreSQL stats:', err);
+    return {
+      isConfigured: true,
+      type: 'Neon PostgreSQL',
+      connectionUrlMasked: maskedUrl,
+      tables: localCounts,
+      lastSyncAt: new Date().toISOString(),
+    };
   }
 }
