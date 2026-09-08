@@ -1,0 +1,6 @@
+{
+  "name": "Cyber Security Learning Platform",
+  "description": "Comprehensive Full-Stack Cyber Security Learning Platform with Basic to Advanced modules, hands-on labs, 20-question quizzes, final project assessment, and verifiable certificates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
