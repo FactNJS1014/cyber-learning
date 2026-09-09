@@ -26,30 +26,38 @@ interface NavbarProps {
 }
 
 export default function Navbar({ user: initialUser }: NavbarProps) {
-  const [user, setUser] = useState<User | null>(initialUser || null);
+  const [clientUser, setClientUser] = useState<User | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const pathname = usePathname();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!initialUser) {
-      const headers: Record<string, string> = {};
-      try {
-        const storedToken = localStorage.getItem('cybersec_session_token');
-        if (storedToken) {
-          headers['Authorization'] = `Bearer ${storedToken}`;
-        }
-      } catch {}
+  const user = initialUser !== undefined ? initialUser : clientUser;
 
-      fetch('/api/auth/me', { headers })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.user) setUser(data.user);
-        })
-        .catch(() => {});
-    }
+  useEffect(() => {
+    if (initialUser !== undefined) return;
+
+    const headers: Record<string, string> = {};
+    try {
+      const storedToken = localStorage.getItem('cybersec_session_token');
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+        // Ensure cookie is synced
+        document.cookie = `cybersec_session=${storedToken}; path=/; max-age=86400; SameSite=Lax`;
+      }
+    } catch {}
+
+    fetch('/api/auth/me', { headers })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setClientUser(data.user);
+        } else {
+          setClientUser(null);
+        }
+      })
+      .catch(() => {});
   }, [initialUser, pathname]);
 
   const handleLogout = async () => {
@@ -61,8 +69,9 @@ export default function Navbar({ user: initialUser }: NavbarProps) {
       try {
         localStorage.removeItem('cybersec_session_token');
         localStorage.removeItem('cybersec_user');
+        document.cookie = 'cybersec_session=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       } catch {}
-      setUser(null);
+      setClientUser(null);
       window.location.href = '/login';
     }
   };

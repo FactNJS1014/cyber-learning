@@ -46,6 +46,7 @@ export default function RegisterPage() {
       if (data.token) {
         try {
           localStorage.setItem('cybersec_session_token', data.token);
+          document.cookie = `cybersec_session=${data.token}; path=/; max-age=86400; SameSite=Lax`;
           if (data.user) {
             localStorage.setItem('cybersec_user', JSON.stringify(data.user));
           }

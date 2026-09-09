@@ -41,6 +41,7 @@ import {
   neonGetUserByEmail,
   neonGetUserById,
   neonGetAllUsers,
+  neonGetSessionByToken,
   neonInsertSession,
   neonDeleteSession,
   neonDeleteUserSessions,
@@ -308,8 +309,23 @@ export async function createSession(userId: string, sessionToken: string, expire
 }
 
 export async function findSessionByToken(token: string): Promise<(Session & { user: User }) | null> {
+  if (!token) return null;
   const db = getDb();
   let session = db.sessions.find((s) => s.sessionToken === token);
+
+  // If session not found in local memory, query Neon PostgreSQL
+  if (!session && isNeonConfigured()) {
+    try {
+      const neonSession = await neonGetSessionByToken(token);
+      if (neonSession) {
+        db.sessions.push(neonSession);
+        saveDb(db);
+        session = neonSession;
+      }
+    } catch (e) {
+      console.warn('Neon findSessionByToken error:', e);
+    }
+  }
 
   if (!session) return null;
 
@@ -326,10 +342,15 @@ export async function findSessionByToken(token: string): Promise<(Session & { us
 
   let user = db.users.find((u) => u.id === session.userId);
   if (!user && isNeonConfigured()) {
-    user = (await neonGetUserById(session.userId)) || undefined;
-    if (user) {
-      db.users.push(user);
-      saveDb(db);
+    try {
+      const neonUser = await neonGetUserById(session.userId);
+      if (neonUser) {
+        db.users.push(neonUser);
+        saveDb(db);
+        user = neonUser;
+      }
+    } catch (e) {
+      console.warn('Neon getUserById in session error:', e);
     }
   }
 

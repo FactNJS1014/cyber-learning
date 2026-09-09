@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css'; // Global styles
+import SessionKeeper from '@/components/SessionKeeper';
 
 export const metadata: Metadata = {
   title: 'Cyber Security Learning Platform',
@@ -22,7 +23,10 @@ export const metadata: Metadata = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <SessionKeeper />
+        {children}
+      </body>
     </html>
   );
 }

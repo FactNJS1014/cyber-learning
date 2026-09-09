@@ -34,9 +34,9 @@ export async function createAuthSession(userId: string): Promise<string> {
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, sessionToken, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
+    httpOnly: false,
+    secure: false,
+    sameSite: 'lax',
     path: '/',
     expires: expiresAt,
     maxAge: SESSION_EXPIRATION_HOURS * 60 * 60,
@@ -54,9 +54,9 @@ export async function clearAuthSession(): Promise<void> {
   }
 
   cookieStore.set(SESSION_COOKIE_NAME, '', {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
+    httpOnly: false,
+    secure: false,
+    sameSite: 'lax',
     path: '/',
     expires: new Date(0),
     maxAge: 0,
@@ -77,6 +77,15 @@ export async function getCurrentUser(): Promise<Omit<User, 'passwordHash'> | nul
         }
         if (!token) {
           token = headerList.get('x-session-token') || undefined;
+        }
+        if (!token) {
+          const rawCookie = headerList.get('cookie');
+          if (rawCookie) {
+            const match = rawCookie.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`));
+            if (match) {
+              token = match[1];
+            }
+          }
         }
       } catch {
         // headers() might not be available in some edge runtimes

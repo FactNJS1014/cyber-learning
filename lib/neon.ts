@@ -468,6 +468,31 @@ export async function neonGetAllUsers(): Promise<User[]> {
 
 // ==================== NEON SESSION OPERATIONS ====================
 
+export async function neonGetSessionByToken(token: string): Promise<Session | null> {
+  if (!isNeonConfigured()) return null;
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT id, user_id as "userId", session_token as "sessionToken", expires_at as "expiresAt", created_at as "createdAt"
+      FROM sessions
+      WHERE session_token = ${token}
+      LIMIT 1;
+    `;
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      userId: r.userId,
+      sessionToken: r.sessionToken,
+      expiresAt: new Date(r.expiresAt).toISOString(),
+      createdAt: new Date(r.createdAt).toISOString(),
+    };
+  } catch (err) {
+    console.error('Neon getSessionByToken error:', err);
+    return null;
+  }
+}
+
 export async function neonInsertSession(session: Session): Promise<boolean> {
   if (!isNeonConfigured()) return false;
   try {
