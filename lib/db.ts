@@ -129,8 +129,18 @@ export function getDb(): DatabaseSchema {
     try {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
       memoryDb = JSON.parse(data);
-      // Ensure all arrays exist
-      if (!memoryDb!.users) memoryDb = getInitialDatabase();
+      if (memoryDb && memoryDb.users) {
+        // Sync latest content & 20 distinct Thai questions per lesson while preserving all user progress & accounts
+        memoryDb.levels = [...initialLevels];
+        memoryDb.courses = [...initialCourses];
+        memoryDb.lessons = [...initialLessons];
+        memoryDb.quizzes = [...initialQuizzes];
+        memoryDb.labs = [...initialLabs];
+        memoryDb.achievements = [...initialAchievements];
+        saveDb(memoryDb);
+        return memoryDb;
+      }
+      memoryDb = getInitialDatabase();
       return memoryDb!;
     } catch (err) {
       console.error('Error reading db.json, re-initializing seed data:', err);

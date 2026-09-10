@@ -1,5 +1,6 @@
 import { Level, Course, Lesson, Quiz, Lab, FinalProject, Achievement, User } from '@/types';
 import bcrypt from 'bcryptjs';
+import { getQuestionsForLesson } from './quizData';
 
 // Pre-computed hashes for default accounts
 export const DEFAULT_ADMIN_PASSWORD_HASH = bcrypt.hashSync('AdminPass123!', 10);
@@ -147,164 +148,6 @@ export const initialCourses: Course[] = [
     order: 9,
   },
 ];
-
-// Helper to generate 20 questions per lesson with rich Thai descriptions
-function generateQuestionsForLesson(lessonId: string, topic: string, customQuestions?: any[]): any[] {
-  if (customQuestions && customQuestions.length === 20) {
-    return customQuestions.map((q, idx) => ({
-      id: `q-${lessonId}-${idx + 1}`,
-      quizId: `quiz-${lessonId}`,
-      question: q.question,
-      questionType: q.questionType || 'MULTIPLE_CHOICE',
-      order: idx + 1,
-      explanation: q.explanation,
-      correctAnswer: q.correctAnswer,
-      options: q.options,
-    }));
-  }
-
-  const baseList = customQuestions || [];
-  const generated: any[] = [...baseList];
-
-  const pool = [
-    {
-      q: `เป้าหมายหลักของ Confidentiality (การรักษาความลับ) ในบริบทของ ${topic} คืออะไร?`,
-      opts: [
-        { key: 'A', text: 'การทำให้มั่นใจว่าข้อมูลจะถูกเข้าถึงได้เฉพาะผู้ที่มีสิทธิ์เท่านั้น (Authorized entities)' },
-        { key: 'B', text: 'การรับประกันว่าเซิร์ฟเวอร์จะเปิดทำงานตลอดเวลา 100%' },
-        { key: 'C', text: 'การป้องกันไม่ให้ใครแก้ไขข้อมูลในฐานข้อมูล' },
-        { key: 'D', text: 'การบันทึก Log ทุกครั้งที่มีการเรียกใช้งาน' },
-      ],
-      ans: 'A',
-      exp: 'Confidentiality (การรักษาความลับ) มุ่งเน้นการปกป้องข้อมูลสำคัญไม่ให้ถูกเปิดเผยหรือเข้าถึงโดยผู้ที่ไม่ได้รับอนุญาต ผ่านกลไกการเข้ารหัสและการจำกัดสิทธิ์',
-    },
-    {
-      q: `ในหัวข้อ ${topic} หลักการ Defense-in-Depth (การป้องกันแบบหลายชั้น) ช่วยเสริมสร้างความปลอดภัยอย่างไร?`,
-      opts: [
-        { key: 'A', text: 'การวางระบบควบคุมหลายชั้นซ้อนกัน เพื่อไม่ให้จุดบกพร่องจุดเดียวทำให้ระบบล่มทั้งหมด' },
-        { key: 'B', text: 'การติดตั้ง Firewall ที่มีประสิทธิภาพสูงสุดเพียงตัวเดียว' },
-        { key: 'C', text: 'การปิดระบบ Log ทั้งหมดเพื่อประหยัดพื้นที่จัดเก็บ' },
-        { key: 'D', text: 'การบังคับให้เปลี่ยนรหัสผ่านทุกๆ 1 ชั่วโมง' },
-      ],
-      ans: 'A',
-      exp: 'Defense-in-Depth คือการใช้มาตรการป้องกันความปลอดภัยหลายระดับ (Network, Host, Application, Data) เพื่อป้องกันเมื่อชั้นใดชั้นหนึ่งถูกเจาะ',
-    },
-    {
-      q: `หลักการ Principle of Least Privilege (การให้สิทธิ์น้อยที่สุดที่จำเป็น) นำไปใช้อย่างไรใน ${topic}?`,
-      opts: [
-        { key: 'A', text: 'การกำหนดสิทธิ์ให้ผู้ใช้หรือ Service เข้าถึงเฉพาะทรัพยากรที่จำเป็นต่อหน้าที่ของตนเท่านั้น' },
-        { key: 'B', text: 'การมอบสิทธิ์ Administrator ให้กับนักพัฒนาทุกคนเพื่อความสะดวกรวดเร็ว' },
-        { key: 'C', text: 'การเปิดให้เข้าถึง API ภายในได้โดยไม่ต้องยืนยันตัวตน' },
-        { key: 'D', text: 'การปิดการใช้งาน Multi-Factor Authentication (MFA)' },
-      ],
-      ans: 'A',
-      exp: 'Least Privilege ช่วยจำกัดความเสียหายที่อาจเกิดขึ้นหากบัญชีหรือบริการนั้นถูกผู้ไม่ประสงค์ดีเข้าควบคุม',
-    },
-    {
-      q: `ในการประเมินความเสี่ยง (Risk Assessment) ของ ${topic} สมการคำนวณความเสี่ยงที่นิยมใช้คืออะไร?`,
-      opts: [
-        { key: 'A', text: 'ความเสี่ยง (Risk) = ภัยคุกคาม (Threat) × ช่องโหว่ (Vulnerability) × ผลกระทบ (Impact)' },
-        { key: 'B', text: 'ความเสี่ยง = จำนวนเครื่องเซิร์ฟเวอร์ ÷ แบนด์วิดท์ของระบบ' },
-        { key: 'C', text: 'ความเสี่ยง = จำนวนพอร์ตที่เปิด + ความเร็วอินเทอร์เน็ต' },
-        { key: 'D', text: 'ความเสี่ยง = จำนวนบรรทัดของโค้ด × 0.5' },
-      ],
-      ans: 'A',
-      exp: 'ตามมาตรฐานสากล ความเสี่ยง (Risk) จะเกิดขึ้นเมื่อมีภัยคุกคามมาเจาะผ่านช่องโหว่ และส่งผลกระทบต่อองค์กร (Likelihood × Impact)',
-    },
-    {
-      q: `ข้อใดคือบทบาทสำคัญของการจัดเก็บและตรวจสอบ Telemetry / Security Audit Logs ใน ${topic}?`,
-      opts: [
-        { key: 'A', text: 'การให้ความสามารถในการตรวจสอบเหตุการณ์ที่น่าสงสัยและวิเคราะห์ที่มาของการโจมตี' },
-        { key: 'B', text: 'การแทนที่ระบบสำรองข้อมูล (Backup) ทั้งหมด' },
-        { key: 'C', text: 'การเพิ่มความเร็วในการประมวลผลของ CPU' },
-        { key: 'D', text: 'การลบบัญชีผู้ใช้ที่ไม่ได้ใช้งานโดยอัตโนมัติ' },
-      ],
-      ans: 'A',
-      exp: 'Security Logs ให้ข้อมูลที่สำคัญต่อการสืบสวนและตอบสนองต่อเหตุการณ์ละเมิดความปลอดภัย (Forensics & Incident Response)',
-    },
-    {
-      q: `จริงหรือไม่: แนวคิด "Security through Obscurity" (ความปลอดภัยด้วยการซ่อนข้อมูล) ถือเป็นมาตรการป้องกันที่เพียงพอใน ${topic}?`,
-      opts: [
-        { key: 'A', text: 'ไม่จริง: การซ่อนข้อมูลเพียงอย่างเดียวจะไร้ผลทันทีที่ผู้โจมตีค้นพบโครงสร้างระบบ' },
-        { key: 'B', text: 'จริง: การเปลี่ยนหมายเลขพอร์ตถือเป็นการป้องกันที่สมบูรณ์แบบแล้ว' },
-        { key: 'C', text: 'จริง: หากเราเก็บ Source Code เป็นความลับ ช่องโหว่จะไม่สามารถเกิดขึ้นได้' },
-        { key: 'D', text: 'ไม่จริง: เพราะการซ่อนข้อมูลจะทำให้ CPU ทำงานหนักขึ้นมหาศาล' },
-      ],
-      ans: 'A',
-      exp: 'ระบบที่ปลอดภัยจริงจะต้องอิงตามหลักการ Kerckhoffs ซึ่งระบบต้องปลอดภัยแม้ว่าผู้โจมตีจะทราบการทำงานทั้งหมด ยกเว้นกุญแจลับ (Key)',
-    },
-    {
-      q: `กลยุทธ์ใดช่วยลดพื้นที่การโจมตี (Attack Surface Reduction) ได้อย่างมีประสิทธิภาพที่สุดใน ${topic}?`,
-      opts: [
-        { key: 'A', text: 'การปิดพอร์ตและปิด Service ที่ไม่ได้ใช้งาน และลบแพ็กเกจที่ไม่จำเป็นออกจาก Production' },
-        { key: 'B', text: 'การเพิ่มขนาด RAM ให้กับเครื่องแม่ข่าย' },
-        { key: 'C', text: 'การเปิด Debug Mode ในระบบที่ใช้งานจริง (Production)' },
-        { key: 'D', text: 'การเปิด Broadcast โปรโตคอล UPnP' },
-      ],
-      ans: 'A',
-      exp: 'การปิดช่องทางที่ไม่ได้ใช้งานทำให้ผู้โจมตีมีจุดเข้าถึง (Entry Points) น้อยลงอย่างมาก',
-    },
-    {
-      q: `การตรวจสอบความถูกต้องของข้อมูล (Integrity Verification) ใน ${topic} มักใช้เทคโนโลยีใด?`,
-      opts: [
-        { key: 'A', text: 'Cryptographic Hashing (เช่น SHA-256) และ Digital Signatures' },
-        { key: 'B', text: 'Base64 Encoding' },
-        { key: 'C', text: 'การบีบอัดไฟล์ ZIP' },
-        { key: 'D', text: 'การเพิ่มขนาดตัวอักษรของข้อมูล' },
-      ],
-      ans: 'A',
-      exp: 'ฟังก์ชัน Hash แบบปลอดภัย เช่น SHA-256 ช่วยตรวจสอบว่าข้อมูลไม่มีการแก้ไขหรือเปลี่ยนแปลงระหว่างทาง',
-    },
-    {
-      q: `ข้อใดกล่าวถูกต้องเกี่ยวกับการจัดการช่องโหว่ (Vulnerability Management) ใน ${topic}?`,
-      opts: [
-        { key: 'A', text: 'ต้องมีการสแกนและอัปเดต Security Patches อย่างต่อเนื่องตามวงรอบ' },
-        { key: 'B', text: 'เมื่อติดตั้งระบบเสร็จแล้วไม่จำเป็นต้องแก้ไขใดๆ อีก' },
-        { key: 'C', text: 'การอัปเดตระบบควรทำเฉพาะเมื่อถูกแฮกแล้วเท่านั้น' },
-        { key: 'D', text: 'ช่องโหว่ระดับ Low ไม่จำเป็นต้องสนใจหรือบันทึกไว้' },
-      ],
-      ans: 'A',
-      exp: 'การจัดการช่องโหว่ต้องทำอย่างต่อเนื่อง (Continuous Lifecycle) เพื่อป้องกันช่องโหว่ใหม่ๆ (Zero-Day และ Known CVEs)',
-    },
-    {
-      q: `ในกระบวนการ Ethical Hacking / Security Assessment สำหรับ ${topic} กฎเกณฑ์ข้อใดสำคัญที่สุด?`,
-      opts: [
-        { key: 'A', text: 'ต้องได้รับความยินยอมเป็นลายลักษณ์อักษร (Authorized Scope & SOW) ก่อนการทดสอบเสมอ' },
-        { key: 'B', text: 'ต้องทำการลบฐานข้อมูลของเป้าหมายเพื่อพิสูจน์ช่องโหว่' },
-        { key: 'C', text: 'สามารถทดสอบระบบใดก็ได้บนอินเทอร์เน็ตโดยไม่ต้องขออนุญาต' },
-        { key: 'D', text: 'ต้องเปิดเผยข้อมูลช่องโหว่ต่อสาธารณะทันทีที่ค้นพบ' },
-      ],
-      ans: 'A',
-      exp: 'การทดสอบความปลอดภัยโดยไม่ได้รับอนุญาตถือเป็นสิ่งผิดกฎหมายอย่างร้ายแรง การทดสอบเชิงจริยธรรมจะต้องมี Scope และการอนุญาตชัดเจนเสมอ',
-    },
-  ];
-
-  while (generated.length < 20) {
-    const idx = generated.length;
-    const template = pool[idx % pool.length];
-    generated.push({
-      id: `q-${lessonId}-${idx + 1}`,
-      quizId: `quiz-${lessonId}`,
-      question: `[คำถามข้อที่ ${idx + 1}] ${template.q}`,
-      questionType: 'MULTIPLE_CHOICE',
-      order: idx + 1,
-      options: template.opts,
-      correctAnswer: template.ans,
-      explanation: template.exp,
-    });
-  }
-
-  return generated.map((q, idx) => ({
-    id: `q-${lessonId}-${idx + 1}`,
-    quizId: `quiz-${lessonId}`,
-    question: q.question,
-    questionType: q.questionType || 'MULTIPLE_CHOICE',
-    order: idx + 1,
-    explanation: q.explanation,
-    correctAnswer: q.correctAnswer,
-    options: q.options,
-  }));
-}
 
 export const initialLessons: Lesson[] = [
   // ==================== LEVEL 1: BASIC ====================
@@ -869,76 +712,19 @@ MITRE ATT&CK เป็นฐานข้อมูลความรู้ที�
   }
 ];
 
-// Generate Quizzes with 20 questions for every single lesson
+// Generate Quizzes with 20 distinct questions for every single lesson
 export const initialQuizzes: Quiz[] = initialLessons.map((lesson) => {
-  const customQ: any[] = [];
-  
-  if (lesson.id === 'lesson-b1-1') {
-    customQ.push(
-      {
-        question: 'เสาหลักข้อใดใน CIA Triad ที่ทำหน้าที่รับรองว่าข้อมูลลับจะไม่ถูกเปิดเผยต่อผู้ที่ไม่ได้รับอนุญาต?',
-        questionType: 'MULTIPLE_CHOICE',
-        options: [
-          { key: 'A', text: 'Confidentiality (การรักษาความลับ)' },
-          { key: 'B', text: 'Integrity (ความถูกต้องสมบูรณ์)' },
-          { key: 'C', text: 'Availability (ความพร้อมใช้งาน)' },
-          { key: 'D', text: 'Non-repudiation (การห้ามปฏิเสธความรับผิดชอบ)' },
-        ],
-        correctAnswer: 'A',
-        explanation: 'Confidentiality (การรักษาความลับ) มีหน้าที่ทำให้มั่นใจว่าข้อมูลสำคัญจะเข้าถึงได้เฉพาะผู้มีสิทธิ์เท่านั้น ผ่านการเข้ารหัสและการจำกัดสิทธิ์',
-      },
-      {
-        question: 'มาตรการควบคุมความปลอดภัยข้อใดสนับสนุนเสาหลัก "Integrity (ความถูกต้องสมบูรณ์)" ได้ดีที่สุด?',
-        questionType: 'MULTIPLE_CHOICE',
-        options: [
-          { key: 'A', text: 'การทำ Cryptographic Hashing (เช่น SHA-256) และ Digital Signatures' },
-          { key: 'B', text: 'การติดตั้งเครื่องสำรองไฟ Uninterruptible Power Supply (UPS)' },
-          { key: 'C', text: 'การติดตั้ง Load Balancer เพื่อกระจายโหลด' },
-          { key: 'D', text: 'การจำกัดแบนด์วิดท์ของระบบ' },
-        ],
-        correctAnswer: 'A',
-        explanation: 'Cryptographic Hashes และ Digital Signatures ช่วยตรวจสอบว่าข้อมูลไม่มีการถูกแก้ไขหรือดัดแปลงระหว่างทาง',
-      },
-      {
-        question: 'ในทางความมั่นคงปลอดภัยไซเบอร์ ข้อใดจัดว่าเป็น "Asset (ทรัพย์สิน)"?',
-        questionType: 'MULTIPLE_CHOICE',
-        options: [
-          { key: 'A', text: 'ข้อมูล ระบบ โครงสร้างพื้นฐาน บุคลากร หรืออุปกรณ์ใดๆ ที่มีมูลค่าต่อองค์กร' },
-          { key: 'B', text: 'เฉพาะเครื่องคอมพิวเตอร์แบบตั้งโต๊ะเท่านั้น' },
-          { key: 'C', text: 'เฉพาะหน้าเว็บเพจที่เปิดให้สาธารณะเข้าถึงได้' },
-          { key: 'D', text: 'สคริปต์ที่ผู้ไม่หวังดีใช้ในการโจมตี' },
-        ],
-        correctAnswer: 'A',
-        explanation: 'Asset ครอบคลุมข้อมูลสำคัญ ระบบโครงสร้างพื้นฐาน บุคลากร และอุปกรณ์ที่มีความสำคัญต่อการดำเนินงานขององค์กร',
-      },
-      {
-        question: 'ข้อใดคือความแตกต่างที่สำคัญระหว่าง "Threat (ภัยคุกคาม)" และ "Vulnerability (ช่องโหว่)"?',
-        questionType: 'MULTIPLE_CHOICE',
-        options: [
-          { key: 'A', text: 'Threat คืออันตรายหรือตัวกระทำที่อาจเกิดขึ้น ส่วน Vulnerability คือจุดอ่อนหรือข้อบกพร่องในระบบ' },
-          { key: 'B', text: 'Threat คือข้อผิดพลาดในโค้ด ส่วน Vulnerability คือกลุ่มแฮกเกอร์' },
-          { key: 'C', text: 'ทั้งสองคำมีความหมายเหมือนกันทุกประการ' },
-          { key: 'D', text: 'Vulnerability ใช้เรียกเฉพาะจุดอ่อนบนอุปกรณ์ฮาร์ดแวร์เท่านั้น' },
-        ],
-        correctAnswer: 'A',
-        explanation: 'Threat คือตัวกระทำหรือสถานการณ์ที่อาจสร้างความเสียหาย ส่วน Vulnerability คือจุดอ่อนที่เปิดโอกาสให้ความเสียหายนั้นเกิดขึ้น',
-      },
-      {
-        question: 'การโจมตีในข้อใดที่มุ่งทำลายเสาหลักด้าน "Availability (ความพร้อมใช้งาน)" โดยตรง?',
-        questionType: 'MULTIPLE_CHOICE',
-        options: [
-          { key: 'A', text: 'Distributed Denial of Service (DDoS) Attack' },
-          { key: 'B', text: 'การดักฟังข้อมูลบนเครือข่าย Wi-Fi ที่ไม่มีการเข้ารหัส' },
-          { key: 'C', text: 'การทำ SQL Injection เพื่อขโมยฐานข้อมูล' },
-          { key: 'D', text: 'การส่ง Phishing Email เพื่อหลอกเอารหัสผ่าน' },
-        ],
-        correctAnswer: 'A',
-        explanation: 'DDoS Attack มีเป้าหมายส่งทราฟฟิกมหาศาลเพื่อทำให้ระบบหรือเซิร์ฟเวอร์ไม่สามารถให้บริการแก่ผู้ใช้งานทั่วไปได้ ซึ่งกระทบต่อ Availability โดยตรง',
-      }
-    );
-  }
-
-  const questions = generateQuestionsForLesson(lesson.id, lesson.title, customQ);
+  const rawQuestions = getQuestionsForLesson(lesson.id);
+  const questions = rawQuestions.map((q, idx) => ({
+    id: `q-${lesson.id}-${idx + 1}`,
+    quizId: `quiz-${lesson.id}`,
+    question: q.question,
+    questionType: q.questionType || 'MULTIPLE_CHOICE',
+    order: idx + 1,
+    options: q.options,
+    correctAnswer: q.correctAnswer,
+    explanation: q.explanation,
+  }));
 
   return {
     id: `quiz-${lesson.id}`,
